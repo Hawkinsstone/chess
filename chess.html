@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GEMINI ETHEREAL CHESS - RANKED</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --glass: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.1);
+            --p1: #00f3ff; /* Cyan */
+            --p2: #ff0055; /* Magenta */
+            --highlight: rgba(0, 243, 255, 0.2);
+            --danger: rgba(255, 0, 85, 0.4);
+        }
+
+        * { box-sizing: border-box; user-select: none; font-family: 'Segoe UI', sans-serif; -webkit-user-drag: none; }
+
+        body {
+            margin: 0; height: 100vh; display: flex; justify-content: center; align-items: center;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #000000 100%);
+            color: white; overflow: hidden; perspective: 1200px;
+        }
+
+        /* Stars Background */
+        .stars {
+            position: absolute; width: 100%; height: 100%; pointer-events: none; z-index: -1;
+            background-image: 
+                radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 3px),
+                radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 2px),
+                radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 3px);
+            background-size: 550px 550px, 350px 350px, 250px 250px;
+            background-position: 0 0, 40px 60px, 130px 270px;
+            animation: starMove 100s linear infinite;
+        }
+        @keyframes starMove { from { transform: translateY(0); } to { transform: translateY(-1000px); } }
+
+        .game-wrap {
+            transform-style: preserve-3d; display: flex; flex-direction: column; align-items: center; gap: 15px;
+            transition: transform 0.5s;
+        }
+
+        /* HUD */
+        .hud {
+            width: 70vmin; display: flex; justify-content: space-between; align-items: center;
+            background: rgba(0,0,0,0.6); padding: 10px 25px; border-radius: 50px;
+            border: 1px solid var(--border); backdrop-filter: blur(10px);
+            font-size: 0.9rem; letter-spacing: 2px; text-transform: uppercase;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .turn-indicator { width: 8px; height: 8px; border-radius: 50%; background: #444; margin: 0 10px; display: inline-block; }
+        .active-p1 .turn-indicator { background: var(--p1); box-shadow: 0 0 10px var(--p1); }
+        .active-p2 .turn-indicator { background: var(--p2); box-shadow: 0 0 10px var(--p2); }
+
+        /* BOARD */
+        .board {
+            width: 70vmin; height: 70vmin; display: grid;
+            grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr);
+            background: var(--glass); backdrop-filter: blur(15px);
+            border: 1px solid var(--border); border-radius: 6px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            transform: rotateX(20deg); transform-style: preserve-3d;
+        }
+
+        .sq { width: 100%; height: 100%; position: relative; display: flex; justify-content: center; align-items: center; }
+        .sq.dark { background: rgba(255,255,255,0.02); }
+        .sq.light { background: rgba(255,255,255,0.06); }
+        
+        .sq.selected { background: var(--highlight); box-shadow: 0 0 20px var(--highlight); z-index: 2; }
+        .sq.move-dest::after { content: ''; width: 12px; height: 12px; background: rgba(255,255,255,0.4); border-radius: 50%; box-shadow: 0 0 10px white; }
+        .sq.capture { background: rgba(255,0,85,0.2); box-shadow: inset 0 0 15px var(--p2); }
+        .sq.check { background: radial-gradient(circle, var(--danger), transparent); animation: pulse 1s infinite; }
+
+        @keyframes pulse { 50% { opacity: 0.5; } }
+
+        .piece {
+            width: 85%; height: 85%; cursor: pointer;
+            background-size: contain; background-repeat: no-repeat; background-position: center;
+            transform: translateZ(5px); transition: transform 0.2s ease;
+        }
+        .piece[data-c="w"] { filter: drop-shadow(0 0 5px var(--p1)); }
+        .piece[data-c="b"] { filter: drop-shadow(0 0 5px var(--p2)); }
+        .piece:hover { transform: translateZ(20px) scale(1.1); }
+
+        /* SCREENS & MENUS */
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(10px);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 100; transition: opacity 0.5s;
+        }
+        .overlay.hidden { opacity: 0; pointer-events: none; }
+
+        h1 { font-size: 3rem; margin-bottom: 10px; text-shadow: 0 0 20px var(--p1); letter-spacing: 5px; }
+        h2 { font-size: 1.5rem; margin-bottom: 40px; color: #aaa; font-weight: 300; letter-spacing: 2px; }
+        
+        .btn-group { display: flex; gap: 20px; }
+        
+        .btn {
+            padding: 15px 40px; background: transparent; border: 1px solid white;
+            color: white; font-size: 1rem; cursor: pointer; text-transform: uppercase; letter-spacing: 2px;
+            transition: 0.3s; position: relative; overflow: hidden;
+        }
+        .btn:hover { background: white; color: black; box-shadow: 0 0 30px white; }
+        
+        .btn-diff { border-color: var(--p1); color: var(--p1); width: 200px; }
+        .btn-diff:hover { background: var(--p1); color: black; box-shadow: 0 0 30px var(--p1); }
+        
+        .diff-desc { font-size: 0.7rem; opacity: 0.6; margin-top: 5px; text-transform: none; letter-spacing: 0; }
+
+        /* Promotion */
+        .promo-box { display: flex; gap: 10px; }
+        .promo-opt { width: 60px; height: 60px; border: 1px solid var(--p1); border-radius: 5px; display: flex; justify-content: center; align-items: center; cursor: pointer; }
+        .promo-opt:hover { background: var(--p1); }
+
+    </style>
+</head>
+<body>
+    <div class="stars"></div>
+
+    <div id="start-screen" class="overlay">
+        <h1>ETHEREAL CHESS</h1>
+        <h2>SELECT DIFFICULTY</h2>
+        <div class="btn-group">
+            <button class="btn btn-diff" onclick="game.start(1)">
+                NOVICE
+                <div class="diff-desc">Depth 1 • Casual</div>
+            </button>
+            <button class="btn btn-diff" onclick="game.start(2)">
+                ADEPT
+                <div class="diff-desc">Depth 2 • Tactical</div>
+            </button>
+            <button class="btn btn-diff" onclick="game.start(3)">
+                MASTER
+                <div class="diff-desc">Depth 3 • Strategic</div>
+            </button>
+        </div>
+    </div>
+
+    <div id="promo-screen" class="overlay hidden">
+        <h2>UPGRADE UNIT</h2>
+        <div class="promo-box" id="promo-options"></div>
+    </div>
+
+    <div id="end-screen" class="overlay hidden">
+        <h1 id="end-title">CHECKMATE</h1>
+        <button class="btn" onclick="location.reload()">SYSTEM REBOOT</button>
+    </div>
+
+    <div class="game-wrap">
+        <div class="hud">
+            <div id="p1-ui" class="active-p1">YOU <span class="turn-indicator"></span></div>
+            <div id="status-text">AWAITING INPUT</div>
+            <div id="p2-ui"><span class="turn-indicator"></span> AI (<span id="diff-label"></span>)</div>
+        </div>
+        <div class="board" id="board"></div>
+    </div>
+
+<script>
+/* --- ASSETS --- */
+const SVG = {
+    p: "M12 31.5c3.39-.97 9.11-1.45 13.5-1.45 4.39 0 10.11.48 13.5 1.45V31c0-2.35-2.9-4.27-6.5-4.27-3.6 0-6.5 1.92-6.5 4.27V31.5z M22.5 9c-2.21 0-4 1.79-4 4 0 .89.29 1.71.78 2.38C17.33 16.5 16 18.59 16 21c0 2.03.94 3.84 2.41 5.03-3 1.06-7.41 5.55-7.41 13.47h23c0-7.92-4.41-12.41-7.41-13.47 1.47-1.19 2.41-3 2.41-5.03 0-2.41-1.33-4.5-3.28-5.62.49-.67.78-1.49.78-2.38 0-2.21-1.79-4-4-4z",
+    r: "M9 39h27v-3H9v3zM12 36v-4h21v4H12zM11 14V9h4v2h5V9h5v2h5V9h4v5 M34 14l-3 3H14l-3-3 M31 17v12.5c0 1.5-1.5 2.5-3 2.5h-11c-1.5 0-3-1-3-2.5V17",
+    n: "M22 10c10.5 1 16.5 8 16 29H15c0-9 10-6.5 8-21 M24 18c.38 2.32-4.68 1.97-5 0 .38-2.32 4.68-1.97 5 0z M21.5 25.5c-4.52-2.87-10.16-1.05-12.5 3.5-2.34 4.56-.52 10.18 4 12.5l5.5-7z M9.5 25.5A4.5 4.5 0 1 1 5 21a4.5 4.5 0 0 1 4.5 4.5z",
+    b: "M9 36c3.39-.97 9.11-1.45 13.5-1.45 4.39 0 10.11.48 13.5 1.45V30c0-2.35-2.9-4.27-6.5-4.27-3.6 0-6.5 1.92-6.5 4.27v2.91c0-2.35-2.9-4.27-6.5-4.27-3.6 0-6.5 1.92-6.5 4.27V36z M15 32c2.5 2.5 12.5 2.5 15 0 .5-1.5 0-2 0-2 0-2.5-2.5-4-2.5-4 5.5-1.5 6-11.5-5-15.5-11 4-10.5 14-5 15.5 0 0-2.5 1.5-2.5 4 0 0-.5.5 0 2z M25 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 1 1 5 0z M17.5 26h10 M15 30h15 M20 18h5",
+    q: "M8 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0z M24.5 7.5a2 2 0 1 1-4 0 2 2 0 0 1 4 0z M41 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0z M10.5 20a2 2 0 1 1-4 0 2 2 0 0 1 4 0z M38.5 20a2 2 0 1 1-4 0 2 2 0 0 1 4 0z M9 26c8.5-1.5 21-1.5 27 0l2-12-7 11V11l-5.5 13.5-3-15-3 15-5.5-13.5V25L7 14l2 12z M11.5 30c3.5-1 18.5-1 22 0 M12 33.5c6-1 15-1 21 0",
+    k: "M22.5 11.63V6M20 8h5 M22.5 25s4.5-7.5 3-10.5c0 0-1-2.5-3-2.5s-3 2.5-3 2.5c-1.5 3 3 10.5 3 10.5 M11.5 37c5.5 3.5 15.5 3.5 21 0v-7s9-4.5 6-10.5c-4-1-5 5.5-8 12H13.5c-3-6.5-4-13-8-12-3 6 6 10.5 6 10.5v7 M11.5 30c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0"
+};
+
+function getImg(t, c) {
+    const col = c === 'w' ? '#00f3ff' : '#ff0055';
+    return `data:image/svg+xml;base64,${btoa(`<svg viewBox="0 0 45 45" xmlns="http://www.w3.org/2000/svg"><path d="${SVG[t]}" fill="${col}" fill-opacity="0.15" stroke="${col}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`)}`;
+}
+
+/* --- GAME ENGINE --- */
+class Engine {
+    constructor() {
+        this.board = [];
+        this.turn = 'w';
+        this.castling = { w: {k:1, q:1}, b: {k:1, q:1} };
+        this.ep = null; // En passant
+        this.difficulty = 1; 
+        this.status = 'ready';
+    }
+
+    start(level) {
+        this.difficulty = level;
+        document.getElementById('diff-label').innerText = level === 1 ? "NOVICE" : level === 2 ? "ADEPT" : "MASTER";
+        document.getElementById('start-screen').classList.add('hidden');
+        this.resetBoard();
+        this.render();
+    }
+
+    resetBoard() {
+        const setup = ['r','n','b','q','k','b','n','r'];
+        this.board = Array(8).fill(null).map(() => Array(8).fill(null));
+        for(let i=0; i<8; i++) {
+            this.board[0][i] = {t: setup[i], c: 'b'};
+            this.board[1][i] = {t: 'p', c: 'b'};
+            this.board[6][i] = {t: 'p', c: 'w'};
+            this.board[7][i] = {t: setup[i], c: 'w'};
+        }
+        this.turn = 'w';
+        this.castling = { w: {k:1, q:1}, b: {k:1, q:1} };
+        this.ep = null;
+        this.status = 'playing';
+        this.updateUI();
+    }
+
+    // --- RULES ---
+    // Efficient Board Cloning for AI
+    cloneBoard(b) { return b.map(row => row.map(p => p ? {...p} : null)); }
+
+    isValid(r, c) { return r>=0 && r<8 && c>=0 && c<8; }
+
+    isAttacked(r, c, byColor, b) {
+        const pawns = byColor === 'w' ? [[1, -1], [1, 1]] : [[-1, -1], [-1, 1]]; // Direction relative to attacker
+        // Check Pawn (reversed view)
+        const pDir = byColor === 'w' ? 1 : -1; 
+        if (this.isValid(r+pDir, c-1)) { const p = b[r+pDir][c-1]; if(p && p.c === byColor && p.t === 'p') return true; }
+        if (this.isValid(r+pDir, c+1)) { const p = b[r+pDir][c+1]; if(p && p.c === byColor && p.t === 'p') return true; }
+
+        // Knight
+        const kn = [[-2,-1],[-2,1],[2,-1],[2,1],[-1,-2],[-1,2],[1,-2],[1,2]];
+        for(let m of kn) {
+            if(this.isValid(r+m[0], c+m[1])) { const p = b[r+m[0]][c+m[1]]; if(p && p.c === byColor && p.t === 'n') return true; }
+        }
+        
+        // King
+        const ki = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+        for(let m of ki) {
+            if(this.isValid(r+m[0], c+m[1])) { const p = b[r+m[0]][c+m[1]]; if(p && p.c === byColor && p.t === 'k') return true; }
+        }
+
+        // Sliders
+        const dirs = [[0,1],[0,-1],[1,0],[-1,0], [1,1],[1,-1],[-1,1],[-1,-1]];
+        for(let i=0; i<8; i++) {
+            let nr = r+dirs[i][0], nc = c+dirs[i][1];
+            while(this.isValid(nr, nc)) {
+                const p = b[nr][nc];
+                if(p) {
+                    if(p.c === byColor) {
+                        const isR = (i<4) && (p.t==='r' || p.t==='q');
+                        const isB = (i>=4) && (p.t==='b' || p.t==='q');
+                        if(isR || isB) return true;
+                    }
+                    break;
+                }
+                nr += dirs[i][0]; nc += dirs[i][1];
+            }
+        }
+        return false;
+    }
+
+    inCheck(color, b) {
+        let k;
+        for(let r=0; r<8; r++) for(let c=0; c<8; c++) if(b[r][c] && b[r][c].t === 'k' && b[r][c].c === color) k = {r,c};
+        if(!k) return true; // Should not happen
+        return this.isAttacked(k.r, k.c, color==='w'?'b':'w', b);
+    }
+
+    getMoves(r, c, b, checkSafety=true) {
+        const p = b[r][c];
+        if(!p) return [];
+        let moves = [];
+        const fwd = p.c === 'w' ? -1 : 1;
+        const start = p.c === 'w' ? 6 : 1;
+        const opp = p.c === 'w' ? 'b' : 'w';
+
+        const add = (tr, tc) => {
+            if(this.isValid(tr, tc)) {
+                const t = b[tr][tc];
+                if(!t || t.c !== p.c) moves.push({r:tr, c:tc});
+            }
+        };
+
+        if(p.t === 'p') {
+            if(this.isValid(r+fwd, c) && !b[r+fwd][c]) {
+                moves.push({r:r+fwd, c:c});
+                if(r === start && !b[r+fwd*2][c]) moves.push({r:r+fwd*2, c:c, dbl:true});
+            }
+            [[fwd, -1], [fwd, 1]].forEach(([dr, dc]) => {
+                if(this.isValid(r+dr, c+dc)) {
+                    const t = b[r+dr][c+dc];
+                    if(t && t.c === opp) moves.push({r:r+dr, c:c+dc});
+                    if(this.ep && this.ep.r === r+dr && this.ep.c === c+dc) moves.push({r:r+dr, c:c+dc, ep:true});
+                }
+            });
+        } else if (p.t === 'n') {
+            [[-2,-1],[-2,1],[2,-1],[2,1],[-1,-2],[-1,2],[1,-2],[1,2]].forEach(([dr,dc]) => add(r+dr, c+dc));
+        } else if (p.t === 'k') {
+            [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc]) => add(r+dr, c+dc));
+            // Castling (Only check on real board, not recursive sim usually, but simplified here)
+            if(checkSafety && this.castling[p.c].k && !this.inCheck(p.c, b)) {
+                if(!b[r][5] && !b[r][6] && !this.isAttacked(r, 5, opp, b) && !this.isAttacked(r, 6, opp, b)) moves.push({r:r, c:6, castle:'k'});
+            }
+            if(checkSafety && this.castling[p.c].q && !this.inCheck(p.c, b)) {
+                if(!b[r][3] && !b[r][2] && !b[r][1] && !this.isAttacked(r, 3, opp, b) && !this.isAttacked(r, 2, opp, b)) moves.push({r:r, c:2, castle:'q'});
+            }
+        } else {
+            const dirs = p.t==='r' ? [[0,1],[0,-1],[1,0],[-1,0]] : p.t==='b' ? [[1,1],[1,-1],[-1,1],[-1,-1]] : [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
+            dirs.forEach(([dr, dc]) => {
+                let nr = r+dr, nc = c+dc;
+                while(this.isValid(nr, nc)) {
+                    const t = b[nr][nc];
+                    if(!t) moves.push({r:nr, c:nc});
+                    else { if(t.c !== p.c) moves.push({r:nr, c:nc}); break; }
+                    nr += dr; nc += dc;
+                }
+            });
+        }
+
+        if(checkSafety) {
+            return moves.filter(m => {
+                const nb = this.cloneBoard(b);
+                nb[m.r][m.c] = nb[r][c];
+                nb[r][c] = null;
+                if(m.ep) nb[r][m.c] = null; // Remove captured pawn
+                return !this.inCheck(p.c, nb);
+            });
+        }
+        return moves;
+    }
+
+    doMove(from, to, real=true) {
+        const p = this.board[from.r][from.c];
+        
+        // Logic for real game state updates
+        if(real) {
+            if(p.t === 'p' && (to.r === 0 || to.r === 7)) {
+                if(p.c === 'w') { this.showPromo(from, to); return; } 
+                else p.t = 'q'; // AI auto queen
+            }
+            
+            // Castling Rights update
+            if(p.t === 'k') { this.castling[p.c] = {k:0, q:0}; }
+            if(p.t === 'r') {
+                if(from.c === 0) this.castling[p.c].q = 0;
+                if(from.c === 7) this.castling[p.c].k = 0;
+            }
+
+            // En Passant update
+            this.ep = to.dbl ? {r: (from.r+to.r)/2, c: from.c} : null;
+        }
+
+        this.board[to.r][to.c] = p;
+        this.board[from.r][from.c] = null;
+        
+        if(to.ep) this.board[from.r][to.c] = null;
+        if(to.castle) {
+            const row = from.r;
+            if(to.castle === 'k') { this.board[row][5] = this.board[row][7]; this.board[row][7] = null; }
+            else { this.board[row][3] = this.board[row][0]; this.board[row][0] = null; }
+        }
+
+        if(real) {
+            this.turn = this.turn === 'w' ? 'b' : 'w';
+            this.render();
+            this.checkEnd();
+            if(this.status === 'playing' && this.turn === 'b') setTimeout(() => this.aiMove(), 100);
+        }
+    }
+
+    // --- AI (Minimax + AlphaBeta) ---
+    evaluate(b) {
+        let score = 0;
+        const vals = { p:100, n:320, b:330, r:500, q:900, k:20000 };
+        // Piece-Square Tables (Simplified) - Encourages center control
+        const pst = [
+            [0,0,0,0,0,0,0,0], [5,10,10,-20,-20,10,10,5], [5,-5,-10,0,0,-10,-5,5], [0,0,0,20,20,0,0,0],
+            [5,5,10,25,25,10,5,5], [10,10,20,30,30,20,10,10], [50,50,50,50,50,50,50,50], [0,0,0,0,0,0,0,0]
+        ];
+
+        for(let r=0; r<8; r++) for(let c=0; c<8; c++) {
+            const p = b[r][c];
+            if(p) {
+                let val = vals[p.t];
+                // Positional bonus
+                if (p.t === 'p') {
+                    const pr = p.c === 'b' ? r : 7-r; // Normalize for black
+                    val += pst[pr][c];
+                } else if (p.t === 'n') {
+                    val += (r>1 && r<6 && c>1 && c<6) ? 20 : 0; // Knights like center
+                }
+                score += p.c === 'b' ? val : -val;
+            }
+        }
+        return score;
+    }
+
+    minimax(b, depth, alpha, beta, isMax) {
+        if(depth === 0) return this.evaluate(b);
+
+        const color = isMax ? 'b' : 'w';
+        let moves = [];
+        for(let r=0; r<8; r++) for(let c=0; c<8; c++) {
+            if(b[r][c] && b[r][c].c === color) {
+                // AI uses raw moves without safety check for speed in deep branches, 
+                // BUT for robustness in JS, we use checkSafety=true for top levels or simply handle king capture
+                // For this demo, we use safe moves to prevent illegal branches
+                this.getMoves(r, c, b, true).forEach(m => moves.push({from:{r,c}, to:m}));
+            }
+        }
+
+        if(moves.length === 0) {
+            if(this.inCheck(color, b)) return isMax ? -Infinity : Infinity; // Mate
+            return 0; // Stalemate
+        }
+
+        if(isMax) {
+            let maxEval = -Infinity;
+            for(let move of moves) {
+                const nb = this.cloneBoard(b);
+                // Simulate move
+                nb[move.to.r][move.to.c] = nb[move.from.r][move.from.c];
+                nb[move.from.r][move.from.c] = null;
+                // Simplified recursion (ignoring castle/ep deep logic for speed)
+                const ev = this.minimax(nb, depth-1, alpha, beta, false);
+                maxEval = Math.max(maxEval, ev);
+                alpha = Math.max(alpha, ev);
+                if(beta <= alpha) break;
+            }
+            return maxEval;
+        } else {
+            let minEval = Infinity;
+            for(let move of moves) {
+                const nb = this.cloneBoard(b);
+                nb[move.to.r][move.to.c] = nb[move.from.r][move.from.c];
+                nb[move.from.r][move.from.c] = null;
+                const ev = this.minimax(nb, depth-1, alpha, beta, true);
+                minEval = Math.min(minEval, ev);
+                beta = Math.min(beta, ev);
+                if(beta <= alpha) break;
+            }
+            return minEval;
+        }
+    }
+
+    aiMove() {
+        if(this.status !== 'playing') return;
+
+        // Gather all moves
+        let allMoves = [];
+        for(let r=0; r<8; r++) for(let c=0; c<8; c++) {
+            if(this.board[r][c] && this.board[r][c].c === 'b') {
+                this.getMoves(r, c, this.board).forEach(m => allMoves.push({from:{r,c}, to:m}));
+            }
+        }
+
+        if(allMoves.length === 0) return;
+
+        // --- DIFFICULTY LOGIC ---
+        let bestMove = null;
+
+        if(this.difficulty === 1) {
+            // NOVICE: Random valid move, 20% chance to just pick random, else greedy capture
+            if(Math.random() < 0.2) {
+                bestMove = allMoves[Math.floor(Math.random() * allMoves.length)];
+            } else {
+                // 1-ply Greedy
+                allMoves.sort((a, b) => {
+                    const pA = this.board[a.to.r][a.to.c];
+                    const pB = this.board[b.to.r][b.to.c];
+                    const vA = pA ? (pA.t==='q'?9:pA.t==='r'?5:pA.t==='b'||pA.t==='n'?3:1) : 0;
+                    const vB = pB ? (pB.t==='q'?9:pB.t==='r'?5:pB.t==='b'||pB.t==='n'?3:1) : 0;
+                    return vB - vA;
+                });
+                bestMove = allMoves[0];
+            }
+        } 
+        else if (this.difficulty === 2) {
+            // ADEPT: Depth 2 Minimax (no pruning needed for depth 2, it's fast)
+            let maxEval = -Infinity;
+            for(let move of allMoves) {
+                const nb = this.cloneBoard(this.board);
+                nb[move.to.r][move.to.c] = nb[move.from.r][move.from.c];
+                nb[move.from.r][move.from.c] = null;
+                const ev = this.minimax(nb, 1, -Infinity, Infinity, false); // Depth 1 recursive = 2 total
+                if(ev > maxEval) { maxEval = ev; bestMove = move; }
+            }
+        } 
+        else {
+            // MASTER: Depth 3 + AlphaBeta
+            let maxEval = -Infinity;
+            // Optimization: Sort moves by captures first to help AlphaBeta prune faster
+            allMoves.sort((a,b) => (this.board[b.to.r][b.to.c]?10:0) - (this.board[a.to.r][a.to.c]?10:0));
+            
+            for(let move of allMoves) {
+                const nb = this.cloneBoard(this.board);
+                nb[move.to.r][move.to.c] = nb[move.from.r][move.from.c];
+                nb[move.from.r][move.from.c] = null;
+                // Depth 2 recursive = 3 total. 
+                const ev = this.minimax(nb, 2, -Infinity, Infinity, false);
+                if(ev > maxEval) { maxEval = ev; bestMove = move; }
+            }
+        }
+
+        if(bestMove) this.doMove(bestMove.from, bestMove.to);
+    }
+
+    // --- UI RENDER ---
+    render() {
+        const bEl = document.getElementById('board');
+        bEl.innerHTML = '';
+        for(let r=0; r<8; r++) for(let c=0; c<8; c++) {
+            const sq = document.createElement('div');
+            sq.className = `sq ${(r+c)%2?'dark':'light'}`;
+            sq.dataset.r = r; sq.dataset.c = c;
+            sq.onclick = () => this.click(r, c);
+            
+            const p = this.board[r][c];
+            if(p) {
+                const el = document.createElement('div');
+                el.className = 'piece';
+                el.dataset.c = p.c;
+                el.style.backgroundImage = `url("${getImg(p.t, p.c)}")`;
+                sq.appendChild(el);
+            }
+            bEl.appendChild(sq);
+        }
+        
+        // Highlight
+        if(this.sel) {
+            const s = this.getMoves(this.sel.r, this.sel.c, this.board);
+            const selIdx = this.sel.r*8 + this.sel.c;
+            bEl.children[selIdx].classList.add('selected');
+            s.forEach(m => {
+                const idx = m.r*8 + m.c;
+                bEl.children[idx].classList.add(this.board[m.r][m.c] ? 'capture' : 'move-dest');
+            });
+        }
+
+        // Check Highlight
+        if(this.inCheck('w', this.board)) this.highlightKing('w');
+        if(this.inCheck('b', this.board)) this.highlightKing('b');
+    }
+
+    highlightKing(c) {
+        for(let r=0; r<8; r++) for(let col=0; col<8; col++) {
+            if(this.board[r][col] && this.board[r][col].t==='k' && this.board[r][col].c===c) {
+                document.getElementById('board').children[r*8+col].classList.add('check');
+            }
+        }
+    }
+
+    updateUI() {
+        const p1 = document.getElementById('p1-ui');
+        const p2 = document.getElementById('p2-ui');
+        const txt = document.getElementById('status-text');
+        if(this.status !== 'playing') return;
+        
+        if(this.turn === 'w') {
+            p1.classList.add('active-p1'); p2.classList.remove('active-p2');
+            txt.innerText = "YOUR COMMAND";
+            txt.style.color = "var(--p1)";
+        } else {
+            p1.classList.remove('active-p1'); p2.classList.add('active-p2');
+            txt.innerText = "CALCULATING VECTOR...";
+            txt.style.color = "var(--p2)";
+        }
+    }
+
+    click(r, c) {
+        if(this.status !== 'playing' || this.turn !== 'w') return;
+        const p = this.board[r][c];
+        
+        if(p && p.c === 'w') {
+            this.sel = {r, c};
+            this.render();
+        } else if (this.sel) {
+            const moves = this.getMoves(this.sel.r, this.sel.c, this.board);
+            const m = moves.find(mv => mv.r === r && mv.c === c);
+            if(m) {
+                this.doMove(this.sel, m);
+                this.sel = null;
+            } else {
+                this.sel = null;
+                this.render();
+            }
+        }
+    }
+
+    checkEnd() {
+        let hasMoves = false;
+        for(let r=0; r<8; r++) for(let c=0; c<8; c++) {
+            if(this.board[r][c] && this.board[r][c].c === this.turn) {
+                if(this.getMoves(r, c, this.board).length > 0) hasMoves = true;
+            }
+        }
+        if(!hasMoves) {
+            this.status = 'end';
+            const win = !this.inCheck(this.turn, this.board); // Stalemate if not in check
+            const t = document.getElementById('end-title');
+            const screen = document.getElementById('end-screen');
+            if(win) { t.innerText = "STALEMATE"; t.style.color = "white"; }
+            else { 
+                t.innerText = this.turn === 'w' ? "DEFEAT" : "VICTORY";
+                t.style.color = this.turn === 'w' ? "var(--danger)" : "var(--p1)";
+            }
+            screen.classList.remove('hidden');
+        }
+        this.updateUI();
+    }
+
+    showPromo(from, to) {
+        const box = document.getElementById('promo-options');
+        box.innerHTML = '';
+        ['q','r','n','b'].forEach(t => {
+            const d = document.createElement('div');
+            d.className = 'promo-opt';
+            d.innerHTML = `<img src="${getImg(t, 'w')}" style="width:40px;">`;
+            d.onclick = () => {
+                document.getElementById('promo-screen').classList.add('hidden');
+                this.board[from.r][from.c].t = t;
+                this.doMove(from, to);
+            };
+            box.appendChild(d);
+        });
+        document.getElementById('promo-screen').classList.remove('hidden');
+    }
+}
+
+const game = new Engine();
+</script>
+</body>
+</html>
