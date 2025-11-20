@@ -3,131 +3,106 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ETHEREAL GO</title>
+    <title>ETHEREAL GO - PRECISION</title>
     <style>
         :root {
             --bg: #050505;
-            --board: rgba(255, 255, 255, 0.02);
-            /* 增强线条亮度，使其清晰可见 */
-            --line: rgba(255, 255, 255, 0.25);
-            --star: rgba(255, 255, 255, 0.6);
+            --board-bg: rgba(255, 255, 255, 0.03);
+            --line-color: rgba(255, 255, 255, 0.25);
             --p1: #00f3ff; /* Cyan */
             --p2: #ff0055; /* Pink */
         }
-        
-        * { box-sizing: border-box; -webkit-user-drag: none; -webkit-tap-highlight-color: transparent; user-select: none; font-family: 'Segoe UI', sans-serif; }
-        
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; font-family: 'Segoe UI', sans-serif; touch-action: none; }
+
         body {
             margin: 0; height: 100dvh; background: #080808; color: white;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            overflow: hidden; touch-action: none;
+            overflow: hidden;
         }
 
+        /* 背景特效 */
         .nebula {
             position: absolute; width: 100%; height: 100%; z-index: -1; pointer-events: none;
             background: 
-                radial-gradient(circle at 20% 20%, rgba(0, 243, 255, 0.08), transparent 50%),
-                radial-gradient(circle at 80% 80%, rgba(255, 0, 85, 0.08), transparent 50%);
+                radial-gradient(circle at 10% 10%, rgba(0, 243, 255, 0.05), transparent 40%),
+                radial-gradient(circle at 90% 90%, rgba(255, 0, 85, 0.05), transparent 40%);
         }
 
         /* HUD */
         .hud {
-            width: 92vw; max-width: 500px; display: flex; justify-content: space-between;
+            width: 90vw; max-width: 500px; display: flex; justify-content: space-between;
             margin-bottom: 20px; padding: 12px 20px; background: rgba(255,255,255,0.05);
             border-radius: 50px; border: 1px solid rgba(255,255,255,0.1);
-            font-size: 0.9rem; letter-spacing: 1px; backdrop-filter: blur(10px);
+            font-size: 0.9rem; backdrop-filter: blur(10px);
         }
-        .score-box { display: flex; align-items: center; gap: 10px; font-weight: bold; }
-        .dot { width: 10px; height: 10px; border-radius: 50%; background: #444; transition: 0.3s; }
-        .active-p1 .dot { background: var(--p1); box-shadow: 0 0 10px var(--p1); }
-        .active-p2 .dot { background: var(--p2); box-shadow: 0 0 10px var(--p2); }
+        .score-box { display: flex; align-items: center; gap: 8px; font-weight: bold; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #444; transition: 0.3s; }
+        .active-p1 .dot { background: var(--p1); box-shadow: 0 0 8px var(--p1); }
+        .active-p2 .dot { background: var(--p2); box-shadow: 0 0 8px var(--p2); }
 
-        /* 棋盘容器 */
-        .board-wrap {
+        /* 棋盘整体容器 (木板边缘) */
+        .board-container {
             width: 92vw; height: 92vw; max-width: 500px; max-height: 500px;
-            position: relative; 
-            background: var(--board); border-radius: 4px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
-            /* padding 留出边缘空隙 */
-            padding: 4%; 
+            background: var(--board-bg);
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+            position: relative;
+            /* 这里的 padding 决定了边缘留白的大小 */
+            padding: 20px; 
         }
 
-        /* 核心修复：网格层 
-           使用 Grid 布局生成 12x12 个格子 (对于 13路棋盘)
-        */
-        .grid-layer {
+        /* 内部棋盘区域 (第一条线到最后一条线的区域) */
+        .board-inner {
             width: 100%; height: 100%;
-            display: grid;
-            /* 动态生成 columns 在 JS 中控制，或者这里写死 repeat(12, 1fr) */
-            grid-template-columns: repeat(12, 1fr);
-            grid-template-rows: repeat(12, 1fr);
-            border: 1px solid var(--line); /* 最外圈框线 */
-            /* 移除右和下的双重边框，因为 cell 会有 */
-            border-right: 0; border-bottom: 0; 
-            position: relative; z-index: 0;
-        }
-
-        .cell {
-            border-right: 1px solid var(--line);
-            border-bottom: 1px solid var(--line);
             position: relative;
         }
 
-        /* 星位层 - 绝对定位在 GridLayer 上 */
+        /* 线条层 */
+        .line { position: absolute; background: var(--line-color); }
+        .line.horz { height: 1px; left: 0; width: 100%; }
+        .line.vert { width: 1px; top: 0; height: 100%; }
+
+        /* 星位 */
         .star {
-            position: absolute; width: 6px; height: 6px; 
-            background: var(--star); border-radius: 50%;
-            transform: translate(-50%, -50%);
-            box-shadow: 0 0 5px white;
-            z-index: 1;
+            position: absolute; width: 6px; height: 6px; background: white; border-radius: 50%;
+            transform: translate(-50%, -50%); opacity: 0.8;
+            box-shadow: 0 0 5px rgba(255,255,255,0.5);
         }
 
-        /* 交互层 (点击区域) */
-        .touch-layer {
+        /* 棋子容器层 */
+        .stones-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            display: grid;
-            /* 13x13 的点击区域，覆盖在 12x12 的格子上 */
-            grid-template-columns: repeat(13, 1fr);
-            grid-template-rows: repeat(13, 1fr);
+            pointer-events: none; /* 让点击穿透到下面的交互层 */
+        }
+
+        .stone {
+            position: absolute;
+            width: 6.5%; height: 6.5%; /* 相对于 board-inner 的尺寸 */
+            border-radius: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             z-index: 10;
         }
+        .stone.show { transform: translate(-50%, -50%) scale(1); }
+
+        .stone.p1 { background: radial-gradient(circle at 30% 30%, #333, #000); border: 1px solid var(--p1); box-shadow: 0 0 8px var(--p1); }
+        .stone.p2 { background: radial-gradient(circle at 30% 30%, #fff, #ccc); border: 1px solid var(--p2); box-shadow: 0 0 8px var(--p2); }
         
-        .intersection {
-            width: 100%; height: 100%;
-            display: flex; justify-content: center; align-items: center;
-            cursor: pointer;
-            /* 调试用：打开下面这行可以看到点击热区 */
-            /* border: 1px solid rgba(255,0,0,0.1); */
-        }
-        
-        /* 棋子 */
-        .stone {
-            width: 90%; height: 90%; border-radius: 50%;
-            transform: scale(0); transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-        .stone.show { transform: scale(1); }
-        
-        /* 黑色棋子 (Cyan 风格) */
-        .stone.p1 { 
-            background: radial-gradient(circle at 30% 30%, #222, #000); 
-            border: 1px solid var(--p1); 
-            box-shadow: 0 0 8px var(--p1), inset 0 0 10px rgba(0, 243, 255, 0.2); 
-        }
-        /* 白色棋子 (Pink 风格) */
-        .stone.p2 { 
-            background: radial-gradient(circle at 30% 30%, #fff, #ddd); 
-            border: 1px solid var(--p2); 
-            box-shadow: 0 0 8px var(--p2), inset 0 0 5px rgba(255, 0, 85, 0.2); 
-        }
-        
-        /* 最后一手标记 */
         .stone.last-move::after {
-            content: ''; position: absolute; top: 50%; left: 50%;
-            width: 30%; height: 30%; border-radius: 50%;
-            background: white; transform: translate(-50%, -50%);
-            animation: pulse 1s infinite;
+            content: ''; position: absolute; top: 50%; left: 50%; width: 4px; height: 4px;
+            background: red; border-radius: 50%; transform: translate(-50%, -50%);
+            box-shadow: 0 0 4px red;
         }
-        @keyframes pulse { 0% { opacity: 0.5; transform: translate(-50%, -50%) scale(0.8); } 100% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } }
+
+        /* 交互层 (覆盖整个容器) */
+        .interaction-layer {
+            position: absolute; top: -20px; left: -20px; right: -20px; bottom: -20px;
+            z-index: 20; cursor: pointer;
+            /* 开启点击高亮去除 */
+            -webkit-tap-highlight-color: transparent;
+        }
 
         /* 菜单 */
         .overlay {
@@ -137,20 +112,17 @@
             z-index: 100; transition: opacity 0.4s;
         }
         .hidden { opacity: 0; pointer-events: none; }
-        
-        h1 { letter-spacing: 5px; text-shadow: 0 0 20px var(--p1); margin-bottom: 40px; font-size: 2rem; }
-        
+
+        h1 { letter-spacing: 6px; color: var(--p1); margin-bottom: 30px; text-shadow: 0 0 20px var(--p1); }
         .btn {
-            padding: 15px 40px; border: 1px solid white; background: rgba(255,255,255,0.05);
-            color: white; font-size: 1rem; margin: 10px; cursor: pointer;
-            transition: 0.2s; letter-spacing: 2px; min-width: 200px; border-radius: 4px;
+            padding: 12px 40px; border: 1px solid var(--p1); color: var(--p1);
+            background: transparent; margin: 10px; font-size: 1rem; cursor: pointer;
+            transition: 0.2s; letter-spacing: 2px; min-width: 200px;
         }
-        .btn:active { transform: scale(0.95); }
-        .btn-cyan { border-color: var(--p1); color: var(--p1); }
-        .btn-cyan:hover { background: var(--p1); color: black; box-shadow: 0 0 20px var(--p1); }
-        
-        .controls { margin-top: 20px; display: flex; gap: 20px; }
-        .mini-btn { padding: 10px 25px; border: 1px solid rgba(255,255,255,0.3); background: transparent; color: #aaa; font-size: 0.8rem; border-radius: 20px; }
+        .btn:hover { background: var(--p1); color: black; box-shadow: 0 0 20px var(--p1); }
+
+        .bottom-controls { margin-top: 30px; display: flex; gap: 20px; }
+        .mini-btn { padding: 10px 20px; border: 1px solid #555; background: transparent; color: #888; border-radius: 20px; }
 
     </style>
 </head>
@@ -159,53 +131,51 @@
 
     <div id="start-screen" class="overlay">
         <h1>ETHEREAL GO</h1>
-        <button class="btn btn-cyan" onclick="game.start(1)">NOVICE (Depth 1)</button>
-        <button class="btn btn-cyan" onclick="game.start(2)">ADEPT (Tactical)</button>
-        <button class="btn btn-cyan" onclick="game.start(3)">MASTER (Strategic)</button>
-        <div style="margin-top: 30px; font-size: 0.8rem; opacity: 0.5;">13x13 BOARD • MOBILE OPTIMIZED</div>
+        <button class="btn" onclick="game.start(1)">NOVICE</button>
+        <button class="btn" onclick="game.start(2)">ADEPT</button>
+        <button class="btn" onclick="game.start(3)">MASTER</button>
     </div>
 
     <div id="end-screen" class="overlay hidden">
         <h1 id="end-msg">GAME OVER</h1>
-        <div id="final-score" style="margin-bottom: 30px; font-size: 1.2rem; opacity: 0.8;"></div>
-        <button class="btn" onclick="location.reload()">REBOOT SYSTEM</button>
-        <button class="btn" onclick="window.location.href='index.html'">EXIT TO HUB</button>
+        <div id="score-display" style="margin-bottom: 20px; color: #ccc;"></div>
+        <button class="btn" onclick="game.start(game.diff)">REBOOT</button>
+        <button class="btn" onclick="window.location.href='index.html'">EXIT</button>
     </div>
 
     <div class="hud">
-        <div class="score-box active-p1" id="p1-ui">
-            <div class="dot"></div>
-            <span>YOU</span>
-            <span id="caps-p1" style="margin-left:5px; opacity:0.6; font-weight:normal;">[0]</span>
+        <div class="score-box active-p1" id="p1-status">
+            <div class="dot"></div> YOU <span style="opacity:0.5" id="cap-p1">0</span>
         </div>
-        <div class="score-box" id="p2-ui">
-            <span id="caps-p2" style="margin-right:5px; opacity:0.6; font-weight:normal;">[0]</span>
-            <span>AI</span>
-            <div class="dot"></div>
+        <div class="score-box" id="p2-status">
+            <span style="opacity:0.5" id="cap-p2">0</span> AI <div class="dot"></div>
         </div>
     </div>
 
-    <div class="board-wrap" id="board-container">
-        <div class="grid-layer" id="grid-bg"></div>
-        
-        <div class="touch-layer" id="touch-layer"></div>
+    <div class="board-container">
+        <div class="board-inner" id="board-inner">
+            <div id="lines-layer"></div>
+            <div id="stones-layer" class="stones-layer"></div>
+            
+            <div class="interaction-layer" id="interaction-layer"></div>
+        </div>
     </div>
 
-    <div class="controls">
+    <div class="bottom-controls">
         <button class="mini-btn" onclick="game.pass()">PASS</button>
         <button class="mini-btn" onclick="window.location.href='index.html'">EXIT</button>
     </div>
 
 <script>
-// 13x13 Board
-const SIZE = 13; 
+const SIZE = 13;
 
-class GoGame {
+class GoEngine {
     constructor() {
-        this.board = []; 
-        this.turn = 1; // 1=Black(Player), 2=White(AI)
-        this.caps = { 1: 0, 2: 0 }; 
+        this.board = [];
+        this.turn = 1;
+        this.caps = {1:0, 2:0};
         this.ko = null;
+        this.history = [];
         this.lastMove = null;
         this.diff = 1;
         this.state = 'init';
@@ -213,327 +183,326 @@ class GoGame {
     }
 
     init() {
-        this.createBoardVisuals();
+        this.drawBoard();
+        this.setupInteraction();
     }
 
     start(level) {
         this.diff = level;
         this.reset();
         document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('end-screen').classList.add('hidden');
         this.state = 'play';
     }
 
     reset() {
         this.board = Array(SIZE).fill(0).map(() => Array(SIZE).fill(0));
         this.turn = 1;
-        this.caps = { 1: 0, 2: 0 };
+        this.caps = {1:0, 2:0};
         this.ko = null;
         this.lastMove = null;
         this.passed = false;
-        this.renderStones();
+        
+        // Clear UI stones
+        document.getElementById('stones-layer').innerHTML = '';
         this.updateUI();
     }
 
-    createBoardVisuals() {
-        // --- 1. Generate Grid Lines (The fix for invisible lines) ---
-        const gridBg = document.getElementById('grid-bg');
-        gridBg.innerHTML = '';
-        // For a 13x13 board (intersections), we need 12x12 squares (cells)
-        for(let i=0; i < (SIZE-1)*(SIZE-1); i++) {
-            const cell = document.createElement('div');
-            cell.className = 'cell';
-            gridBg.appendChild(cell);
+    drawBoard() {
+        const layer = document.getElementById('lines-layer');
+        layer.innerHTML = '';
+
+        // Draw Lines using Absolute Positioning %
+        for (let i = 0; i < SIZE; i++) {
+            const pos = (i / (SIZE - 1)) * 100;
+            
+            // Horizontal Line
+            const h = document.createElement('div');
+            h.className = 'line horz';
+            h.style.top = pos + '%';
+            layer.appendChild(h);
+
+            // Vertical Line
+            const v = document.createElement('div');
+            v.className = 'line vert';
+            v.style.left = pos + '%';
+            layer.appendChild(v);
         }
 
-        // --- 2. Generate Star Points ---
-        // Star points are positioned absolutely relative to the grid-layer
-        const stars = [ [3,3], [3,9], [6,6], [9,3], [9,9] ];
-        stars.forEach(([r,c]) => {
-            // Calculate percentage position based on lines (0 to 12 indices)
-            const top = (r / (SIZE - 1)) * 100;
-            const left = (c / (SIZE - 1)) * 100;
-            
+        // Draw Stars (13x13: 3,3 | 3,9 | 6,6 | 9,3 | 9,9)
+        const stars = [[3,3], [3,9], [6,6], [9,3], [9,9]];
+        stars.forEach(([r, c]) => {
             const s = document.createElement('div');
             s.className = 'star';
-            s.style.top = top + '%';
-            s.style.left = left + '%';
-            gridBg.appendChild(s);
+            s.style.top = (r / (SIZE - 1)) * 100 + '%';
+            s.style.left = (c / (SIZE - 1)) * 100 + '%';
+            layer.appendChild(s);
         });
+    }
 
-        // --- 3. Generate Touch Layer (Intersections) ---
-        const tl = document.getElementById('touch-layer');
-        tl.innerHTML = '';
-        for(let r=0; r<SIZE; r++) {
-            for(let c=0; c<SIZE; c++) {
-                const div = document.createElement('div');
-                div.className = 'intersection';
-                div.dataset.r = r;
-                div.dataset.c = c;
-                // Touch/Click handlers
-                div.onclick = (e) => { e.preventDefault(); this.playerMove(r, c); };
-                tl.appendChild(div);
+    setupInteraction() {
+        const layer = document.getElementById('interaction-layer');
+        layer.addEventListener('pointerup', (e) => {
+            if(this.state !== 'play' || this.turn !== 1) return;
+            
+            // Precision Click Calculation
+            const rect = document.getElementById('board-inner').getBoundingClientRect();
+            
+            // Position relative to the inner board (where lines start/end)
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Step size
+            const stepX = rect.width / (SIZE - 1);
+            const stepY = rect.height / (SIZE - 1);
+            
+            // Round to nearest intersection
+            const c = Math.round(x / stepX);
+            const r = Math.round(y / stepY);
+
+            // Validate bounds
+            if (r >= 0 && r < SIZE && c >= 0 && c < SIZE) {
+                // Optional: check if click was too far from intersection (tolerance)
+                // For mobile, we usually skip tolerance to be friendly
+                this.play(r, c);
             }
+        });
+    }
+
+    play(r, c) {
+        if (this.isValidMove(r, c, 1)) {
+            this.executeMove(r, c, 1);
+            this.turn = 2;
+            this.updateUI();
+            setTimeout(() => this.aiTurn(), 400);
+        } else {
+            // Vibration for error?
+            if(navigator.vibrate) navigator.vibrate(50);
         }
     }
 
-    // --- GAME LOGIC ---
+    // --- CORE RULES ---
+    inBounds(r, c) { return r>=0 && r<SIZE && c>=0 && c<SIZE; }
 
-    isValid(r, c) { return r >= 0 && r < SIZE && c >= 0 && c < SIZE; }
-
-    getGroup(r, c, board = this.board) {
+    getGroup(r, c, board=this.board) {
         const color = board[r][c];
-        if (color === 0) return { stones: [], liberties: 0 };
+        if(color === 0) return null;
+        let stones = [], libs = new Set(), visited = new Set();
+        let q = [[r,c]];
+        visited.add(r+','+c);
         
-        let group = [];
-        let liberties = new Set(); // Use Set to count unique liberties
-        let visited = new Set();
-        let queue = [[r,c]];
-        visited.add(`${r},${c}`);
-
-        while (queue.length > 0) {
-            const [curR, curC] = queue.shift();
-            group.push([curR, curC]);
-
-            [[0,1], [0,-1], [1,0], [-1,0]].forEach(([dr, dc]) => {
-                const nr = curR + dr, nc = curC + dc;
-                if (this.isValid(nr, nc)) {
-                    const key = `${nr},${nc}`;
-                    if (board[nr][nc] === 0) {
-                        liberties.add(key);
-                    } else if (board[nr][nc] === color && !visited.has(key)) {
-                        visited.add(key);
-                        queue.push([nr, nc]);
+        while(q.length) {
+            const [cr, cc] = q.shift();
+            stones.push([cr, cc]);
+            [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dr,dc]) => {
+                const nr=cr+dr, nc=cc+dc;
+                if(this.inBounds(nr,nc)) {
+                    const k = nr+','+nc;
+                    if(board[nr][nc] === 0) libs.add(k);
+                    else if(board[nr][nc] === color && !visited.has(k)) {
+                        visited.add(k);
+                        q.push([nr,nc]);
                     }
                 }
             });
         }
-        return { stones: group, liberties: liberties.size };
+        return { stones, libs: libs.size };
     }
 
-    placeStone(r, c, color, mock = false) {
-        if (this.board[r][c] !== 0) return false;
-        if (this.ko && this.ko[0] === r && this.ko[1] === c) return false;
-
-        let nextBoard = this.board.map(row => [...row]);
-        nextBoard[r][c] = color;
+    isValidMove(r, c, color, mockBoard=null) {
+        const b = mockBoard || this.board;
+        if (b[r][c] !== 0) return false;
+        if (this.ko && this.ko[0]===r && this.ko[1]===c) return false;
         
-        let captured = [];
-        const opp = color === 1 ? 2 : 1;
+        // Quick suicide check
+        // Simulate
+        let nb = b.map(row => [...row]);
+        nb[r][c] = color;
+        let captured = 0;
+        const opp = color===1?2:1;
         
-        // Check captures
-        [[0,1], [0,-1], [1,0], [-1,0]].forEach(([dr, dc]) => {
-            const nr = r + dr, nc = c + dc;
-            if (this.isValid(nr, nc) && nextBoard[nr][nc] === opp) {
-                const group = this.getGroup(nr, nc, nextBoard);
-                if (group.liberties === 0) captured.push(...group.stones);
+        [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dr,dc]) => {
+            const nr=r+dr, nc=c+dc;
+            if(this.inBounds(nr,nc) && nb[nr][nc]===opp) {
+                const g = this.getGroup(nr, nc, nb);
+                if(g.libs === 0) captured += g.stones.length;
             }
         });
 
-        captured.forEach(([cr, cc]) => nextBoard[cr][cc] = 0);
-
-        // Suicide check (only illegal if no capture happened)
-        const selfGroup = this.getGroup(r, c, nextBoard);
-        if (selfGroup.liberties === 0 && captured.length === 0) return false;
-
-        if (!mock) {
-            this.board = nextBoard;
-            this.caps[color] += captured.length;
-            
-            // Ko logic
-            if (captured.length === 1 && selfGroup.stones.length === 1 && selfGroup.liberties === 1) {
-                this.ko = captured[0];
-            } else {
-                this.ko = null;
-            }
-
-            this.lastMove = [r, c];
-            this.passed = false;
-            if(navigator.vibrate) navigator.vibrate(captured.length > 0 ? 40 : 10);
-            return true;
-        }
+        if(captured > 0) return true; // Valid capture
+        const myG = this.getGroup(r, c, nb);
+        if(myG.libs === 0) return false; // Suicide
         return true;
     }
 
-    playerMove(r, c) {
-        if (this.state !== 'play' || this.turn !== 1) return;
+    executeMove(r, c, color) {
+        this.board[r][c] = color;
+        let captured = [];
+        const opp = color===1?2:1;
         
-        if (this.placeStone(r, c, 1)) {
-            this.renderStones();
-            this.turn = 2;
-            this.updateUI();
-            setTimeout(() => this.aiMove(), 300);
+        // Check Captures
+        [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dr,dc]) => {
+            const nr=r+dr, nc=c+dc;
+            if(this.inBounds(nr,nc) && this.board[nr][nc]===opp) {
+                const g = this.getGroup(nr, nc);
+                if(g.libs === 0) captured.push(...g.stones);
+            }
+        });
+
+        captured.forEach(([cr, cc]) => this.board[cr][cc] = 0);
+        this.caps[color] += captured.length;
+        
+        // Check Ko
+        const myG = this.getGroup(r, c);
+        if(captured.length === 1 && myG.stones.length === 1 && myG.libs === 1) {
+            this.ko = captured[0];
+        } else {
+            this.ko = null;
         }
+
+        this.lastMove = [r, c];
+        this.passed = false;
+        this.renderStone(r, c, color);
+        this.removeStones(captured);
+        
+        if(navigator.vibrate) navigator.vibrate(captured.length > 0 ? 40 : 10);
     }
 
-    pass() {
-        if (this.state !== 'play') return;
-        if (this.passed) {
-            this.endGame();
+    // --- VISUALS ---
+    renderStone(r, c, color) {
+        const layer = document.getElementById('stones-layer');
+        
+        // Remove previous "last move" marker
+        const prev = layer.querySelector('.last-move');
+        if(prev) prev.classList.remove('last-move');
+
+        const s = document.createElement('div');
+        s.className = `stone p${color} last-move`;
+        s.id = `s-${r}-${c}`;
+        // Absolute positioning logic:
+        s.style.top = (r / (SIZE - 1)) * 100 + '%';
+        s.style.left = (c / (SIZE - 1)) * 100 + '%';
+        
+        layer.appendChild(s);
+        requestAnimationFrame(() => s.classList.add('show'));
+    }
+
+    removeStones(list) {
+        list.forEach(([r, c]) => {
+            const el = document.getElementById(`s-${r}-${c}`);
+            if(el) el.remove();
+        });
+    }
+
+    updateUI() {
+        const p1 = document.getElementById('p1-status');
+        const p2 = document.getElementById('p2-status');
+        document.getElementById('cap-p1').innerText = this.caps[1];
+        document.getElementById('cap-p2').innerText = this.caps[2];
+        
+        if(this.turn===1) { p1.classList.add('active-p1'); p2.classList.remove('active-p2'); }
+        else { p1.classList.remove('active-p1'); p2.classList.add('active-p2'); }
+    }
+
+    // --- AI ---
+    aiTurn() {
+        if(this.state !== 'play') return;
+        
+        const moves = [];
+        for(let r=0; r<SIZE; r++) for(let c=0; c<SIZE; c++) {
+            if(this.isValidMove(r, c, 2)) moves.push([r,c]);
+        }
+
+        if(moves.length === 0) { this.pass(); return; }
+
+        // Random Factor based on difficulty
+        // Novice: Pure Random
+        if(this.diff === 1 && Math.random() < 0.3) {
+            const m = moves[Math.floor(Math.random()*moves.length)];
+            this.executeMove(m[0], m[1], 2);
+            this.endTurn();
             return;
         }
-        this.passed = true;
-        this.turn = this.turn === 1 ? 2 : 1;
-        this.ko = null;
-        this.updateUI();
-        if (this.turn === 2) setTimeout(() => this.aiMove(), 500);
-    }
 
-    // --- SIMPLE AI ---
-    aiMove() {
-        if (this.state !== 'play') return;
-
-        const opp = 1, self = 2;
-        let bestMove = null;
-        let maxScore = -Infinity;
+        // Greedy Eval
+        let best = null; 
+        let maxScore = -9999;
         
-        let moves = [];
-        for(let r=0; r<SIZE; r++) for(let c=0; c<SIZE; c++) {
-            if(this.board[r][c] === 0) moves.push([r,c]);
-        }
-        
-        if (moves.length === 0) { this.pass(); return; }
-        
-        // Novice: Mostly random
-        if (this.diff === 1 && Math.random() < 0.3) {
-            moves.sort(() => Math.random() - 0.5);
-            for(let m of moves) {
-                if(this.placeStone(m[0], m[1], self)) {
-                    this.finishTurn(); return;
-                }
-            }
-            this.pass(); return;
-        }
-
-        // Evaluation
+        // Shuffle
         moves.sort(() => Math.random() - 0.5);
-        for (let [r, c] of moves) {
-            if (this.placeStone(r, c, self, true)) {
-                let score = 0;
-                
-                // Sim capture
-                let tempBoard = this.board.map(row => [...row]);
-                tempBoard[r][c] = self;
-                
-                let captureCount = 0;
-                let atariBonus = 0;
-
-                [[0,1], [0,-1], [1,0], [-1,0]].forEach(([dr, dc]) => {
-                    const nr = r+dr, nc = c+dc;
-                    if(this.isValid(nr, nc) && tempBoard[nr][nc] === opp) {
-                        const g = this.getGroup(nr, nc, tempBoard);
-                        if(g.liberties === 0) captureCount += g.stones.length;
-                        else if(g.liberties === 1) atariBonus += 50; // Atari enemy
-                    }
-                });
-
-                score += captureCount * 1000;
-                score += atariBonus;
-
-                // Save self from Atari
-                const myG = this.getGroup(r, c, tempBoard);
-                if (myG.liberties === 1) score -= 200; // Self-atari bad
-                if (myG.liberties > 2) score += 10;
-
-                // Shape/Position
-                const isEdge = r===0 || r===SIZE-1 || c===0 || c===SIZE-1;
-                if (isEdge) score -= 15; // Don't play 1st line early
-                
-                const distR = Math.min(r, SIZE-1-r);
-                const distC = Math.min(c, SIZE-1-c);
-                if (distR >= 2 && distC >= 2) score += 5; // Center/Corner bias
-                
-                // Star points
-                if ([3,9,6].includes(r) && [3,9,6].includes(c)) score += 20;
-
-                if (score > maxScore) {
-                    maxScore = score;
-                    bestMove = [r, c];
+        
+        for(let [r, c] of moves) {
+            let score = 0;
+            
+            // Simulate
+            let nb = this.board.map(row => [...row]);
+            nb[r][c] = 2;
+            
+            // 1. Capture Bonus
+            let caps = 0;
+            let atari = 0;
+            [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dr,dc]) => {
+                const nr=r+dr, nc=c+dc;
+                if(this.inBounds(nr,nc) && nb[nr][nc]===1) {
+                    const g = this.getGroup(nr, nc, nb);
+                    if(g.libs === 0) caps += g.stones.length;
+                    else if(g.libs === 1) atari += 1;
                 }
-            }
+            });
+            score += caps * 100;
+            score += atari * 20;
+
+            // 2. Self Safety
+            const selfG = this.getGroup(r, c, nb);
+            if(selfG.libs === 1) score -= 50; // Bad shape
+            if(selfG.libs > 2) score += 5;
+
+            // 3. Position (Distance to center/edge)
+            const edgeDist = Math.min(r, c, SIZE-1-r, SIZE-1-c);
+            if(edgeDist === 0) score -= 10; // 1st line is bad
+            if(edgeDist === 2) score += 5; // 3rd line is good territory
+            
+            if(score > maxScore) { maxScore = score; best = [r, c]; }
         }
 
-        if (bestMove) {
-            this.placeStone(bestMove[0], bestMove[1], self);
-            this.finishTurn();
+        if(best) {
+            this.executeMove(best[0], best[1], 2);
+            this.endTurn();
         } else {
             this.pass();
         }
     }
 
-    finishTurn() {
-        this.renderStones();
+    endTurn() {
         this.turn = 1;
         this.updateUI();
     }
 
+    pass() {
+        if(this.passed) {
+            this.endGame();
+            return;
+        }
+        this.passed = true;
+        this.turn = this.turn===1?2:1;
+        this.updateUI();
+        if(this.turn===2) setTimeout(() => this.aiTurn(), 500);
+    }
+
     endGame() {
         this.state = 'end';
-        // Simplified scoring (Area: Stones + Territory is too hard for pure JS snippet)
-        // Using Stone Count + Captures + Komi
-        let b = this.caps[1], w = this.caps[2] + 6.5; // Komi
-        for(let r=0; r<SIZE; r++) for(let c=0; c<SIZE; c++) {
-            if(this.board[r][c]===1) b++;
-            if(this.board[r][c]===2) w++;
-        }
-        
-        const msg = document.getElementById('end-msg');
-        const score = document.getElementById('final-score');
-        
-        if(b > w) {
-            msg.innerText = "VICTORY";
-            msg.style.color = "var(--p1)";
-        } else {
-            msg.innerText = "DEFEAT";
-            msg.style.color = "var(--p2)";
-        }
-        score.innerText = `BLACK: ${b} | WHITE: ${w}`;
+        const b = this.caps[1];
+        const w = this.caps[2] + 6.5;
+        // Note: This is a simplified score display. Real Go scoring is complex.
+        // Here we just show captures + komi for the "arcade" feel.
+        document.getElementById('end-msg').innerText = b > w ? "VICTORY" : "DEFEAT";
+        document.getElementById('end-msg').style.color = b > w ? "var(--p1)" : "var(--p2)";
+        document.getElementById('score-display').innerText = `Caps: Black ${b} - White ${w}`;
         document.getElementById('end-screen').classList.remove('hidden');
-    }
-
-    renderStones() {
-        const tl = document.getElementById('touch-layer');
-        const cells = tl.children;
-        for(let r=0; r<SIZE; r++) {
-            for(let c=0; c<SIZE; c++) {
-                const idx = r*SIZE + c;
-                const cell = cells[idx];
-                const val = this.board[r][c];
-                
-                let stone = cell.querySelector('.stone');
-                
-                if(val === 0) {
-                    if(stone) stone.remove();
-                } else {
-                    if(!stone || stone.dataset.c != val) {
-                        if(stone) stone.remove();
-                        stone = document.createElement('div');
-                        stone.className = `stone p${val}`;
-                        stone.dataset.c = val;
-                        cell.appendChild(stone);
-                        requestAnimationFrame(() => stone.classList.add('show'));
-                    }
-                    // Mark last move
-                    if(this.lastMove && this.lastMove[0]===r && this.lastMove[1]===c) stone.classList.add('last-move');
-                    else stone.classList.remove('last-move');
-                }
-            }
-        }
-    }
-
-    updateUI() {
-        const p1 = document.getElementById('p1-ui');
-        const p2 = document.getElementById('p2-ui');
-        document.getElementById('caps-p1').innerText = `[${this.caps[1]}]`;
-        document.getElementById('caps-p2').innerText = `[${this.caps[2]}]`;
-        if(this.turn === 1) {
-            p1.classList.add('active-p1'); p2.classList.remove('active-p2');
-        } else {
-            p1.classList.remove('active-p1'); p2.classList.add('active-p2');
-        }
     }
 }
 
-const game = new GoGame();
+const game = new GoEngine();
 game.init();
 </script>
 </body>
